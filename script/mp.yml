@@ -1,0 +1,30 @@
+name: mp
+channels:
+  - soumith
+dependencies:
+  # CUDA-enabled caffe
+  # See https://github.com/conda-forge/caffe-feedstock/issues/27
+  - python=3.6
+  - cudatoolkit=9.0
+  - cudnn=7.1.2
+  # pytorch from soumith
+  - pytorch
+  - torchvision
+  - magma-cuda90
+  - typing
+  - mkl-include
+  # numpy/scipy
+  - numpy
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - graphviz
+  - numba
+  - jupyter
+  - pyyaml
+  - mkl
+  - setuptools
+  - cmake
+  - cffi
+  - ujson
+  - tqdm
