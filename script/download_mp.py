@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 
 # Script to create simple flat pytorch ImageFolder folder hierarchy
 # of training and validation images for miniplaces.  Each category
@@ -26,13 +26,7 @@ urls = [
 ensure_dir('dataset/miniplaces/raw')
 ensure_dir('dataset/miniplaces/data')
 
-# python2 vs 3
-try:
-    import urllib
-    urlopen = urllib.request.urlopen
-except:
-    import urllib2
-    urlopen = urllib2.urlopen
+from urllib.request import urlopen
 
 for url in urls:
     filename = url.rpartition('/')[2]
