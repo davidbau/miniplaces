@@ -12,13 +12,13 @@ from customnet import CustomResNet
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/resnet'
+    experiment_dir = 'experiment/resnet_qcrop'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
             transform=transforms.Compose([
                         transforms.Resize(128),
-                        transforms.RandomCrop(112),
+                        transforms.RandomCrop(96),
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
                         transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
@@ -29,7 +29,7 @@ def main():
         CachedImageFolder('dataset/miniplaces/simple/val',
             transform=transforms.Compose([
                         transforms.Resize(128),
-                        transforms.CenterCrop(112),
+                        # transforms.CenterCrop(112),
                         transforms.ToTensor(),
                         transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
                         ])),
