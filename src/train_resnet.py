@@ -10,14 +10,6 @@ from torchvision import transforms
 from torch.optim import Optimizer
 from customnet import CustomResNet
 
-class GlobalAveragePool2d(torch.nn.Module):
-    def __init__(self):
-        super(GlobalAveragePool2d, self).__init__()
-
-    def forward(self, x):
-        x = torch.mean(x.view(x.size(0), x.size(1), -1), dim=2)
-        return x
-
 def main():
     progress = default_progress()
     experiment_dir = 'experiment/resnet'
@@ -31,7 +23,7 @@ def main():
                         transforms.ToTensor(),
                         transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
                         ])),
-        batch_size=64, shuffle=True,
+        batch_size=32, shuffle=True,
         num_workers=24, pin_memory=True)
     val_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/val',
@@ -41,7 +33,7 @@ def main():
                         transforms.ToTensor(),
                         transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
                         ])),
-        batch_size=128, shuffle=False,
+        batch_size=32, shuffle=False,
         num_workers=24, pin_memory=True)
     # Create a simplified ResNet with half resolution.
     model = CustomResNet(18, num_classes=100, halfsize=True)
@@ -52,12 +44,12 @@ def main():
     # An abbreviated training schedule: 40000 batches.
     # TODO: tune these hyperparameters.
     # init_lr = 0.002
-    init_lr = 0.0002
+    init_lr = 1e-4
     # max_iter = 40000 - 34.5% @1
     # max_iter = 50000 - 37% @1
     # max_iter = 80000 - 39.7% @1
     # max_iter = 100000 - 40.1% @1
-    max_iter = 10000
+    max_iter = 50000
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.Adam(model.parameters())
     iter_num = 0
