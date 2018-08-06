@@ -30,7 +30,7 @@ class DoubleBackpropLoss(object):
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/dbp13_resnet_qcrop'
+    experiment_dir = 'experiment/dbp10_resnet_qcrop'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
@@ -69,7 +69,7 @@ def main():
     # max_iter = 80000 - 39.7% @1
     # max_iter = 100000 - 40.1% @1
     max_iter = 50000
-    criterion = DoubleBackpropLoss(1e13)
+    criterion = DoubleBackpropLoss(1e10)
     optimizer = torch.optim.Adam(model.parameters())
     iter_num = 0
     best = dict(val_accuracy=0.0)
