@@ -10,13 +10,11 @@ from torchvision import transforms
 from torch.optim import Optimizer
 from customnet import CustomResNet
 
-class DualDoubleBackpropLoss(object):
-    def __init__(self, alpha, beta):
-        print_progress('Using Dual with alpha %e beta %e' % (alpha, beta))
+class DoubleBackpropLoss(object):
+    def __init__(self, alpha):
         self.alpha = alpha
-        self.beta = beta
 
-    def __call__(self, inp, out_with_extra, target):
+    def __call__(self, out_with_extra, target):
         output = out_with_extra[0]
         features = out_with_extra[1:]
         loss = nn.functional.cross_entropy(output, target)
@@ -25,23 +23,15 @@ class DualDoubleBackpropLoss(object):
         grad_norm = 0
         for gf in grad_features:
             grad_norm = grad_norm + gf.pow(2).sum()
-        # For each image, compute the most important feature
-        grad_inp = 0
-        max_features = [f.view(f.shape[0], -1).max(1)[0].sum()
-                for f in features]
-        for max_f in max_features:
-            (g_inp,) = torch.autograd.grad(max_f, [inp], create_graph=True)
-            grad_inp = grad_inp + g_inp.pow(2).sum()
         # Full loss
-        inp_sens = self.beta * grad_inp
-        feat_sens = self.alpha * grad_norm
-        regularized_loss = loss + feat_sens + inp_sens
+        grad_loss = self.alpha * grad_norm
+        regularized_loss = loss + self.alpha * grad_norm
         # print('loss vs grad norm: %g vs %g' % (loss, grad_norm))
-        return regularized_loss, loss, feat_sens, inp_sens
+        return regularized_loss, loss, grad_loss
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/dual_3_-2_resnet'
+    experiment_dir = 'experiment/l2dbp4_resnet'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
@@ -66,7 +56,7 @@ def main():
         num_workers=24, pin_memory=True)
     # Create a simplified ResNet with half resolution.
     model = CustomResNet(18, num_classes=100, halfsize=True,
-            extra_output=['layer3'])
+            extra_output=['layer2'])
 
     model.train()
     model.cuda()
@@ -80,7 +70,7 @@ def main():
     # max_iter = 80000 - 39.7% @1
     # max_iter = 100000 - 40.1% @1
     max_iter = 50000
-    criterion = DualDoubleBackpropLoss(1e3, 1e-2)
+    criterion = DoubleBackpropLoss(1e4)
     optimizer = torch.optim.Adam(model.parameters())
     iter_num = 0
     best = dict(val_accuracy=0.0)
@@ -142,19 +132,15 @@ def main():
             # Track the average training loss/accuracy for each epoch.
             train_loss, train_acc = AverageMeter(), AverageMeter()
             train_loss_u = AverageMeter()
-            train_inp_sens = AverageMeter()
-            train_feat_sens = AverageMeter()
+            train_loss_g = AverageMeter()
             # Load data
             input_var, target_var = [d.cuda() for d in [input, target]]
             # Evaluate model
-            input_var.requires_grad = True
             output = model(input_var)
-            loss, unreg_loss, f_sens, inp_sens = criterion(
-                    input_var, output, target_var)
+            loss, unreg_loss, grad_loss = criterion(output, target_var)
             train_loss.update(loss.data.item(), input.size(0))
             train_loss_u.update(unreg_loss.data.item(), input.size(0))
-            train_inp_sens.update(inp_sens.data.item(), input.size(0))
-            train_feat_sens.update(f_sens.data.item(), input.size(0))
+            train_loss_g.update(grad_loss.data.item(), input.size(0))
             # Perform one step of SGD
             optimizer.zero_grad()
             loss.backward()
@@ -165,8 +151,8 @@ def main():
                     input.size(0))
             train_acc.update(accuracy)
             remaining = 1 - iter_num / float(max_iter)
-            post_progress(f=train_feat_sens.avg, u=train_loss_u.avg,
-                    i=train_inp_sens.avg, a=train_acc.avg*100.0)
+            post_progress(g=train_loss_g.avg, u=train_loss_u.avg,
+                    a=train_acc.avg*100.0)
             # Advance
             iter_num += 1
             if iter_num >= max_iter:

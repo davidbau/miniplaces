@@ -10,7 +10,7 @@ from torchvision import transforms
 from torch.optim import Optimizer
 from customnet import CustomResNet
 
-class DualDoubleBackpropLoss(object):
+class FiltDualDoubleBackpropLoss(object):
     def __init__(self, alpha, beta):
         print_progress('Using Dual with alpha %e beta %e' % (alpha, beta))
         self.alpha = alpha
@@ -21,17 +21,13 @@ class DualDoubleBackpropLoss(object):
         features = out_with_extra[1:]
         loss = nn.functional.cross_entropy(output, target)
         # Now compute 2nd derivative penalty.
-        grad_features = torch.autograd.grad(loss, features, create_graph=True)
-        grad_norm = 0
-        for gf in grad_features:
-            grad_norm = grad_norm + gf.pow(2).sum()
+        filt, f = features
+        [gf] = torch.autograd.grad(loss, [f], create_graph=True)
+        grad_norm = gf.pow(2).sum()
         # For each image, compute the most important feature
-        grad_inp = 0
-        max_features = [f.view(f.shape[0], -1).max(1)[0].sum()
-                for f in features]
-        for max_f in max_features:
-            (g_inp,) = torch.autograd.grad(max_f, [inp], create_graph=True)
-            grad_inp = grad_inp + g_inp.pow(2).sum()
+        max_f = f.view(f.shape[0], -1).max(1)[0].sum()
+        (g_inp,) = torch.autograd.grad(max_f, [filt], create_graph=True)
+        grad_inp = g_inp.pow(2).sum()
         # Full loss
         inp_sens = self.beta * grad_inp
         feat_sens = self.alpha * grad_norm
@@ -41,7 +37,7 @@ class DualDoubleBackpropLoss(object):
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/dual_3_-2_resnet'
+    experiment_dir = 'experiment/fdual_3_-2_resnet'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
@@ -66,7 +62,7 @@ def main():
         num_workers=24, pin_memory=True)
     # Create a simplified ResNet with half resolution.
     model = CustomResNet(18, num_classes=100, halfsize=True,
-            extra_output=['layer3'])
+            extra_output=['maxpool', 'layer3'])
 
     model.train()
     model.cuda()
@@ -80,7 +76,7 @@ def main():
     # max_iter = 80000 - 39.7% @1
     # max_iter = 100000 - 40.1% @1
     max_iter = 50000
-    criterion = DualDoubleBackpropLoss(1e3, 1e-2)
+    criterion = FiltDualDoubleBackpropLoss(1e3, 1e-2)
     optimizer = torch.optim.Adam(model.parameters())
     iter_num = 0
     best = dict(val_accuracy=0.0)
