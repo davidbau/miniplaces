@@ -39,7 +39,7 @@ class BotDoubleBackpropLoss(object):
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/bot0_resnet_qcrop'
+    experiment_dir = 'experiment/bot0_resnet'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',

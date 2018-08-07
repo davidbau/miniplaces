@@ -12,13 +12,13 @@ from customnet import CustomResNet
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/resnet_qcrop'
+    experiment_dir = 'experiment/resnet'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
             transform=transforms.Compose([
                         transforms.Resize(128),
-                        transforms.RandomCrop(96),
+                        transforms.RandomCrop(112),
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
                         transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
@@ -101,7 +101,8 @@ def main():
             'loss': val_loss.avg,
         }, val_acc.avg > best['val_accuracy'])
         best['val_accuracy'] = max(val_acc.avg, best['val_accuracy'])
-        post_progress(v=val_acc.avg)
+        print_progress('Iteration %d val accuracy %.2f' %
+                (iter_num, val_acc.avg * 100.0))
 
     # Here is our training loop.
     while iter_num < max_iter:

@@ -28,7 +28,7 @@ class InpDoubleBackpropLoss(object):
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/inp3_resnet'
+    experiment_dir = 'experiment/inp2_resnet'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
@@ -66,7 +66,7 @@ def main():
     # max_iter = 80000 - 39.7% @1
     # max_iter = 100000 - 40.1% @1
     max_iter = 50000
-    criterion = InpDoubleBackpropLoss(1e3)
+    criterion = InpDoubleBackpropLoss(1e2)
     optimizer = torch.optim.Adam(model.parameters())
     iter_num = 0
     best = dict(val_accuracy=0.0)
