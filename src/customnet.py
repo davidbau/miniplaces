@@ -43,9 +43,9 @@ class CustomResNet(nn.Module):
             ('maxpool', nn.MaxPool2d(3, stride=1 if halfsize else 2,
                 padding=1)),
             ('layer1', self._make_layer(block, 64, layers[0])),
-            ('layer2', self._make_layer(block, 128, layers[1])),
-            ('layer3', self._make_layer(block, 256, layers[2])),
-            ('layer4', self._make_layer(block, 512, layers[3])),
+            ('layer2', self._make_layer(block, 128, layers[1], stride=2)),
+            ('layer3', self._make_layer(block, 256, layers[2], stride=2)),
+            ('layer4', self._make_layer(block, 512, layers[3], stride=2)),
             ('avgpool', GlobalAveragePool2d()),
             ('fc', nn.Linear(512 * block.expansion, num_classes))
         ])
@@ -54,8 +54,8 @@ class CustomResNet(nn.Module):
             setattr(self, name, layer)
         self.extra_output = extra_output
 
-    def _make_layer(self, block, channels, depth):
-        return resnet.ResNet._make_layer(self, block, channels, depth)
+    def _make_layer(self, block, channels, depth, stride=1):
+        return resnet.ResNet._make_layer(self, block, channels, depth, stride)
 
     def forward(self, x):
         extra = []
