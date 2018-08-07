@@ -18,7 +18,7 @@ class InpDoubleBackpropLoss(object):
         loss = nn.functional.cross_entropy(output, target)
         # Now compute 2nd derivative penalty.
         [grad_inp] = torch.autograd.grad(loss, [inp], create_graph=True)
-        grad_norm = grad_inp.pow(2).mean()
+        grad_norm = grad_inp.pow(2).sum()
         # Full loss
         inp_sens = self.beta * grad_norm
         # feat_sens = self.alpha * grad_norm
@@ -28,13 +28,13 @@ class InpDoubleBackpropLoss(object):
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/inp_10_resnet_qcrop'
+    experiment_dir = 'experiment/inp3_resnet'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
             transform=transforms.Compose([
                         transforms.Resize(128),
-                        transforms.RandomCrop(96),
+                        transforms.RandomCrop(112),
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
                         transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
@@ -66,7 +66,7 @@ def main():
     # max_iter = 80000 - 39.7% @1
     # max_iter = 100000 - 40.1% @1
     max_iter = 50000
-    criterion = InpDoubleBackpropLoss(1e10)
+    criterion = InpDoubleBackpropLoss(1e3)
     optimizer = torch.optim.Adam(model.parameters())
     iter_num = 0
     best = dict(val_accuracy=0.0)

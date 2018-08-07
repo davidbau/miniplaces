@@ -22,21 +22,22 @@ class DoubleBackpropLoss(object):
         grad_features = torch.autograd.grad(loss, features, create_graph=True)
         grad_norm = 0
         for gf in grad_features:
-            grad_norm = grad_norm + gf.pow(2).mean()
+            grad_norm = grad_norm + gf.pow(2).sum()
         # Full loss
+        grad_loss = self.alpha * grad_norm
         regularized_loss = loss + self.alpha * grad_norm
         # print('loss vs grad norm: %g vs %g' % (loss, grad_norm))
-        return regularized_loss, loss
+        return regularized_loss, loss, grad_loss
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/dbp10_resnet_qcrop'
+    experiment_dir = 'experiment/dbp4_resnet'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
             transform=transforms.Compose([
                         transforms.Resize(128),
-                        transforms.RandomCrop(96),
+                        transforms.RandomCrop(112),
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
                         transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
@@ -69,7 +70,7 @@ def main():
     # max_iter = 80000 - 39.7% @1
     # max_iter = 100000 - 40.1% @1
     max_iter = 50000
-    criterion = DoubleBackpropLoss(1e10)
+    criterion = DoubleBackpropLoss(1e4)
     optimizer = torch.optim.Adam(model.parameters())
     iter_num = 0
     best = dict(val_accuracy=0.0)
@@ -131,13 +132,15 @@ def main():
             # Track the average training loss/accuracy for each epoch.
             train_loss, train_acc = AverageMeter(), AverageMeter()
             train_loss_u = AverageMeter()
+            train_loss_g = AverageMeter()
             # Load data
             input_var, target_var = [d.cuda() for d in [input, target]]
             # Evaluate model
             output = model(input_var)
-            loss, unreg_loss = criterion(output, target_var)
+            loss, unreg_loss, grad_loss = criterion(output, target_var)
             train_loss.update(loss.data.item(), input.size(0))
             train_loss_u.update(unreg_loss.data.item(), input.size(0))
+            train_loss_g.update(grad_loss.data.item(), input.size(0))
             # Perform one step of SGD
             optimizer.zero_grad()
             loss.backward()
@@ -148,7 +151,7 @@ def main():
                     input.size(0))
             train_acc.update(accuracy)
             remaining = 1 - iter_num / float(max_iter)
-            post_progress(l=train_loss.avg, u=train_loss_u.avg,
+            post_progress(g=train_loss_g.avg, u=train_loss_u.avg,
                     a=train_acc.avg*100.0)
             # Advance
             iter_num += 1

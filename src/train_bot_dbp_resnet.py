@@ -29,7 +29,7 @@ class BotDoubleBackpropLoss(object):
                 for f in features]
         for max_f in max_features:
             (g_inp,) = torch.autograd.grad(max_f, [inp], create_graph=True)
-            grad_inp = grad_inp + g_inp.pow(2).mean()
+            grad_inp = grad_inp + g_inp.pow(2).sum()
         # Full loss
         inp_sens = self.beta * grad_inp
         # feat_sens = self.alpha * grad_norm
@@ -39,13 +39,13 @@ class BotDoubleBackpropLoss(object):
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/bot_3_resnet_qcrop'
+    experiment_dir = 'experiment/bot0_resnet_qcrop'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
             transform=transforms.Compose([
                         transforms.Resize(128),
-                        transforms.RandomCrop(96),
+                        transforms.RandomCrop(112),
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
                         transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
@@ -78,7 +78,7 @@ def main():
     # max_iter = 80000 - 39.7% @1
     # max_iter = 100000 - 40.1% @1
     max_iter = 50000
-    criterion = BotDoubleBackpropLoss(1e3)
+    criterion = BotDoubleBackpropLoss(1e0)
     optimizer = torch.optim.Adam(model.parameters())
     iter_num = 0
     best = dict(val_accuracy=0.0)
