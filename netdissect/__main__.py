@@ -1,4 +1,4 @@
-import torch, sys, os, argparse, textwrap
+import torch, sys, os, argparse, textwrap, numbers, numpy, json
 from torchvision import transforms
 from netdissect.progress import verbose_progress, print_progress
 from netdissect import retain_layers, BrodenDataset, dissect, ReverseNormalize
@@ -40,6 +40,8 @@ def main():
                         help='filename of Broden dataset')
     parser.add_argument('--layers', type=strpair, nargs='+',
                         help='space-separated list of layer names to dissect')
+    parser.add_argument('--meta', type=str, nargs='+',
+                        help='filenames of metadata json files')
     parser.add_argument('--netname', type=str, default=None,
                         help='name for network in generated reports')
     parser.add_argument('--imgsize', type=intpair, default=(227, 227),
@@ -54,6 +56,8 @@ def main():
                         help='number of DataLoader workers')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA usage')
+    parser.add_argument('--perturbation', default=None,
+                        help='filename of perturbation attack to apply')
     parser.add_argument('--add_scale_offset', action='store_true', default=None,
                         help='offsets masks according to stride and padding')
     parser.add_argument('--quiet', action='store_true', default=False,
@@ -79,13 +83,23 @@ def main():
         args.add_scale_offset = ('Alex' in model.__class__.__name__)
 
     # Load its state dict
+    meta = {}
     if args.pthfile is None:
         print_progress('Dissecting model without pth file.')
     else:
         data = torch.load(args.pthfile)
         if 'state_dict' in data:
+            meta = {}
+            for key in data:
+                if isinstance(data[key], numbers.Number):
+                    meta[key] = data[key]
             data = data['state_dict']
         model.load_state_dict(data)
+
+    # Update any metadata from files, if any
+    for mfilename in args.meta:
+        with open(mfilename) as f:
+            meta.update(json.load(f))
 
     # Instrument it and prepare it for eval
     if not args.layers:
@@ -102,6 +116,9 @@ def main():
         print_progress('Writing output into %s.' % args.outdir)
     os.makedirs(args.outdir, exist_ok=True)
 
+    # Load perturbation
+    perturbation = numpy.load(args.perturbation) if args.perturbation else None
+
     # Load broden dataset
     brodendir = args.broden
     if brodendir is None:
@@ -113,6 +130,7 @@ def main():
     bds = BrodenDataset(brodendir,
             transform_image=transforms.Compose([
                 transforms.Resize(args.imgsize),
+                AddPerturbation(perturbation),
                 transforms.ToTensor(),
                 transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV)]),
             size=args.size)
@@ -122,8 +140,28 @@ def main():
             recover_image=ReverseNormalize(IMAGE_MEAN, IMAGE_STDEV),
             examples_per_unit=args.examples,
             netname=args.netname,
+            meta=meta,
             batch_size=args.batch_size,
             num_workers=args.num_workers)
+
+class AddPerturbation(object):
+    def __init__(self, perturbation):
+        self.perturbation = perturbation
+
+    def __call__(self, pic):
+        if self.perturbation is None:
+            return pic
+        # Convert to a numpy float32 array
+        npyimg = numpy.array(pic, numpy.uint8, copy=False
+                ).astype(numpy.float32)
+        # Center the perturbation
+        oy, ox = ((self.perturbation.shape[d] - npyimg.shape[d]) // 2
+                for d in [0, 1])
+        npyimg += self.perturbation[
+                oy:oy+npyimg.shape[0], ox:ox+npyimg.shape[1]]
+        # Pytorch conventions: as a float it should be [0..1]
+        npyimg.clip(0, 255, npyimg)
+        return npyimg / 255.0
 
 def test_dissection():
     verbose_progress(True)
