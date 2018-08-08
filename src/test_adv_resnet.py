@@ -10,17 +10,6 @@ from torchvision import transforms
 from torch.optim import Optimizer
 from customnet import CustomResNet
 
-class AddPerturbation(object):
-    def __init__(self, perturbation):
-        self.perturbation = perturbation
-
-    def __call__(self, pic):
-        npyimg = numpy.array(pic, numpy.uint8, copy=False
-                ).astype(numpy.float32)
-        npyimg += self.perturbation
-        npyimg.clip(0, 255, npyimg)
-        return npyimg / 255.0  # As a float it should be [0..1]
-
 def main():
     parser = argparse.ArgumentParser(description='Adversarial test')
     parser.add_argument('--expdir', type=str, default=None, required=True,
@@ -72,6 +61,17 @@ def main():
         json.dump(dict(
             adversarial_acc=val_acc.avg,
             adversarial_loss=val_loss.avg), f)
+
+class AddPerturbation(object):
+    def __init__(self, perturbation):
+        self.perturbation = perturbation
+
+    def __call__(self, pic):
+        npyimg = numpy.array(pic, numpy.uint8, copy=False
+                ).astype(numpy.float32)
+        npyimg += self.perturbation
+        npyimg.clip(0, 255, npyimg)
+        return npyimg / 255.0  # As a float it should be [0..1]
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
