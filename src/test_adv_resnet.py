@@ -17,7 +17,14 @@ def main():
     args = parser.parse_args()
     progress = default_progress()
     experiment_dir = args.expdir
-    perturbation = numpy.load('perturbation/VGG-19.npy')
+    perturbation1 = numpy.load('perturbation/VGG-19.npy')
+    perturbation = numpy.load('perturbation/perturb_synth.npy')
+    print('Original std %e new std %e' % (numpy.std(perturbation1),
+        numpy.std(perturbation)))
+    perturbation *= numpy.std(perturbation1) / numpy.std(perturbation)
+    # To deaturate uncomment.
+    # perturbation = numpy.repeat(perturbation[:,:,1:2], 3, axis=2)
+
     val_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/val',
             transform=transforms.Compose([
