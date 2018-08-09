@@ -136,8 +136,8 @@ def main():
                      227 if max(args.imgsize) <= 227 else 384)
     if not args.download and not os.path.isfile(os.path.join(args.broden,
         'broden%d_%d' % (args.broden_version, ds_resolution), 'index.csv')):
-        print_progress('Broden at resolution %d not found in %s.' %
-                (ds_resolution, args.broden))
+        print_progress('Broden%d at resolution %d not found in %s.' %
+                (args.broden_version, ds_resolution, args.broden))
         print_progress('Add --download to download the dataset.')
         sys.exit(1)
 
