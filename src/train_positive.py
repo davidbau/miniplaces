@@ -2,80 +2,59 @@ import torch, numpy, os, shutil, math, re
 from progress import set_default_verbosity, print_progress, post_progress
 from progress import default_progress, desc_progress
 from files import ensure_dir_for
-from alexnet import AlexNet
-from torch.autograd import Variable
 from torch import nn
 from torch.nn import init
 from imagefolder import CachedImageFolder
 from alexnet import IMAGE_MEAN, IMAGE_STDEV
 from torchvision import transforms
 from torch.optim import Optimizer
-
-def is_positive_param(name):
-    return 'weight' in name and 'conv3' in name and 'fc8' not in name
+from customnet import CustomResNet
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/positive'
+    experiment_dir = 'experiment/positive_resnet'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
             transform=transforms.Compose([
                         transforms.Resize(128),
-                        transforms.RandomCrop(119),
+                        transforms.RandomCrop(112),
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
-                        transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV) ])),
-        batch_size=64, shuffle=True,
-        num_workers=6, pin_memory=True)
+                        transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
+                        ])),
+        batch_size=32, shuffle=True,
+        num_workers=24, pin_memory=True)
     val_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/val',
             transform=transforms.Compose([
                         transforms.Resize(128),
-                        transforms.CenterCrop(119),
+                        # transforms.CenterCrop(112),
                         transforms.ToTensor(),
-                        transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV) ])),
-        batch_size=512, shuffle=False,
-        num_workers=6, pin_memory=True)
-    # Create a simplified AlexNet with half resolution.
-    model = AlexNet(first_layer='conv1', last_layer='fc8',
-            layer_sizes=dict(fc6=2048, fc7=2048),
-            output_channels=100, half_resolution=True,
-            modify_sequence=add_scale_layers,
-            include_lrn=False, split_groups=False).cuda()
-    # Initialize weights by loading an old model.
-    init_data = torch.load('experiment/miniplaces/best_miniplaces.pth.tar')
-    model.load_state_dict(init_data['state_dict'], strict=False)
-    for name, val in model.named_parameters():
-        if 'weight' in name:
-            init.kaiming_uniform_(val)
-            if is_positive_param(name):
-                with torch.no_grad():
-                    val.abs_()
-        elif 'scale' in name:
-            init.uniform_(val, -0.1, 0.1)
-            # init.constant_(val, 1)
-        else:
-            # Init positive bias in many layers to avoid dead neurons.
-            assert 'bias' in name
-            init.constant_(val, 0 if any(name.startswith(layer)
-                    for layer in ['conv1', 'conv3', 'fc8']) else 1)
+                        transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV),
+                        ])),
+        batch_size=32, shuffle=False,
+        num_workers=24, pin_memory=True)
+    # Create a simplified ResNet with half resolution.
+    model = CustomResNet(18, num_classes=100, halfsize=True)
+    checkpoint_filename = 'best_miniplaces.pth.tar'
+    best_checkpoint = os.path.join('experiment/resnet', checkpoint_filename)
+    checkpoint = torch.load(best_checkpoint)
+    model.load_state_dict(checkpoint['state_dict'])
+    model.train()
+    model.cuda()
+
     # An abbreviated training schedule: 40000 batches.
     # TODO: tune these hyperparameters.
     # init_lr = 0.002
-    init_lr = 0.002
+    init_lr = 1e-4
     # max_iter = 40000 - 34.5% @1
     # max_iter = 50000 - 37% @1
     # max_iter = 80000 - 39.7% @1
     # max_iter = 100000 - 40.1% @1
-    max_iter = 100000
+    max_iter = 50000
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=init_lr,
-            momentum=0.9, # 0.9,
-            # weight_decay=0.001)
-            weight_decay=0)
+    optimizer = torch.optim.Adam(model.parameters())
     iter_num = 0
     best = dict(val_accuracy=0.0)
     model.train()
@@ -104,8 +83,7 @@ def main():
         val_loss, val_acc = AverageMeter(), AverageMeter()
         for input, target in progress(val_loader):
             # Load data
-            input_var, target_var = [Variable(d.cuda(non_blocking=True))
-                    for d in [input, target]]
+            input_var, target_var = [d.cuda() for d in [input, target]]
             # Evaluate model
             with torch.no_grad():
                 output = model(input_var)
@@ -126,16 +104,39 @@ def main():
             'loss': val_loss.avg,
         }, val_acc.avg > best['val_accuracy'])
         best['val_accuracy'] = max(val_acc.avg, best['val_accuracy'])
-        post_progress(v=val_acc.avg)
+        print_progress('Iteration %d val accuracy %.2f' %
+                (iter_num, val_acc.avg * 100.0))
 
     # Here is our training loop.
     while iter_num < max_iter:
         for input, target in progress(train_loader):
+            if iter_num % 1000 == 0:
+                # Every 1000 turns chop down the negative params
+                neg_means = []
+                pos_means = []
+                neg_count = 0
+                param_count = 0
+                with torch.no_grad():
+                    for name, param in model.named_parameters():
+                        if all(n in name for n in ['layer4', 'conv', 'weight']):
+                            pc = param.numel()
+                            neg = (param < 0)
+                            nc = neg.int().sum().item()
+                            param_count += pc
+                            neg_count += nc
+                            if nc > 0:
+                                neg_means.append(param[neg].mean().item())
+                            if nc < pc:
+                                pos_means.append(param[~neg].mean().item())
+                            param[neg] *= 0.5
+                    print_progress('%d/%d neg, mean %e vs %e pos' %
+                            (neg_count, param_count,
+                                sum(neg_means) / len(neg_means),
+                                sum(pos_means) / len(pos_means)))
             # Track the average training loss/accuracy for each epoch.
             train_loss, train_acc = AverageMeter(), AverageMeter()
             # Load data
-            input_var, target_var = [Variable(d.cuda(non_blocking=True))
-                    for d in [input, target]]
+            input_var, target_var = [d.cuda() for d in [input, target]]
             # Evaluate model
             output = model(input_var)
             loss = criterion(output, target_var)
@@ -144,12 +145,6 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            # Project to positive weights only
-            if True:
-                for name, val in model.named_parameters():
-                    if is_positive_param(name):
-                        with torch.no_grad():
-                            val.clamp_(min=0)
             # Also check training set accuracy
             _, pred = output.max(1)
             accuracy = (target_var.eq(pred)).data.float().sum().item() / (
@@ -170,25 +165,6 @@ def main():
             if iter_num % 1000 == 0:
                 validate_and_checkpoint()
                 model.train()
-
-class ScaleLayer(nn.Module):
-    def __init__(self, size):
-        super(ScaleLayer, self).__init__()
-        self.scale = nn.Parameter(torch.ones(size))
-
-    def forward(self, x):
-        uscale = self.scale.view(*((1, -1) + (1,) * (len(x.shape) - 2)))
-        return x * uscale
-
-def add_scale_layers(sequence):
-    result = []
-    for name, layer in sequence:
-        result.append((name, layer))
-        if is_positive_param(name):
-            layernum = int(re.search('\d+', name).group(0))
-            units = layer.out_features if 'fc' in name else layer.out_channels
-            result.append(('scale%d' % (layernum), ScaleLayer(units)))
-    return result
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
