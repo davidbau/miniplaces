@@ -23,14 +23,22 @@ def main():
         numpy.load('perturbation/VGG-19.npy'),
         numpy.load('perturbation/perturb_synth.npy'),
         numpy.load('perturbation/perturb_synth_histmatch.npy'),
-        numpy.load('perturbation/perturb_synth_newspectrum.npy')
+        numpy.load('perturbation/perturb_synth_newspectrum.npy'),
+        numpy.load('perturbation/perturbation_rotated.npy'),
+        numpy.load('perturbation/perturbation_rotated_averaged.npy'),
+        numpy.load('perturbation/perturbation_noisefree.npy'),
+        numpy.load('perturbation/perturbation_noisefree_nodc.npy'),
     ]
     perturbation_name = [
         "unattacked",
         "universal adversary",
         "synthetic",
         "histmatch",
-        "newspectrum"
+        "newspectrum",
+        "rotated",
+        "rotated_averaged",
+        "noisefree",
+        "noisefree_nodc",
     ]
     print('Original std %e new std %e' % (numpy.std(perturbations[1]),
         numpy.std(perturbations[2])))
