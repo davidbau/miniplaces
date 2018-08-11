@@ -5,6 +5,7 @@
 /pytorch
 /torchvision
 /dissection
+/perturbation
 /testdir
 /.ipynb_checkpoints
 *.pyc
