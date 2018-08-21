@@ -1,5 +1,5 @@
 import numpy, torch
-from src.customnet import CustomResNet
+from customnet import CustomResNet
 from torch import nn
 
 class ConstantModuleWrapper(nn.Module):
@@ -27,9 +27,10 @@ def make_smoother(channels):
     return ConstantModuleWrapper(smoother)
 
 class Smoother(nn.Module):
-    def __init__(self):
+    def __init__(self, stride=1):
         super().__init__()
-        smoother = nn.Conv2d(1, 1, 3, 1, bias=False)
+        smoother = nn.Conv2d(1, 1, kernel_size=3, padding=1,
+                stride=stride, bias=False)
         kernel = torch.from_numpy(numpy.array([
             [0.0625, 0.125, 0.0625],
             [0.125,  0.25,  0.125 ],
@@ -44,7 +45,8 @@ class Smoother(nn.Module):
         shape = data.shape
         flattened = data.view(shape[0] * shape[1], 1, shape[2], shape[3])
         smoothed = smoother(flattened)
-        unflattened = flattened.view(*shape)
+        unflattened = smoothed.view(shape[0], shape[1],
+                smoothed.shape[2], smoothed.shape[3])
         return unflattened
     def _apply(self, fn):
         super()._apply(fn)
@@ -63,9 +65,9 @@ class SmoothedResNet18(CustomResNet):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                Smoother(),
+                Smoother(stride=2),
                 nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
+                          kernel_size=1, stride=1, bias=False),
                 nn.BatchNorm2d(planes * block.expansion),
             )
 

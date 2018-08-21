@@ -12,7 +12,7 @@ from smoothnet import SmoothedResNet18
 
 def main():
     progress = default_progress()
-    experiment_dir = 'experiment/smoothnet'
+    experiment_dir = 'experiment/smoothnet2'
     # Here's our data
     train_loader = torch.utils.data.DataLoader(
         CachedImageFolder('dataset/miniplaces/simple/train',
