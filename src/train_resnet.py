@@ -59,7 +59,7 @@ def main():
     checkpoint_filename = 'miniplaces.pth.tar'
     best_filename = 'best_%s' % checkpoint_filename
     best_checkpoint = os.path.join(experiment_dir, best_filename)
-    try_to_resume_training = False
+    try_to_resume_training = True
     if try_to_resume_training and os.path.exists(best_checkpoint):
         checkpoint = torch.load(os.path.join(experiment_dir, best_filename))
         iter_num = checkpoint['iter']
